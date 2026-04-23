@@ -183,9 +183,9 @@ function ListingsPage({ setPage, setSelectedProp }) {
       .then(d => {
         const props = d.properties || [];
         // Fall back to demo data if nothing in database yet
-        setProperties(props.length > 0 ? props : DEMOS);
+        setProperties(props);
       })
-      .catch(() => setProperties(DEMOS))
+      .catch(() => setProperties([]))
       .finally(() => setLoading(false));
   }, []);
 
