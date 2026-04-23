@@ -366,90 +366,289 @@ function AIPage({ setPage, setSelectedProp }) {
 // ─── Simple placeholder pages ─────────────────────────────────────────────
 function ApplyPage({ property, setPage }) {
   const { user } = useAuth();
-  const [sent, setSent] = useState(false);
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
-  const [form, setForm] = useState({ moveInDate:'', message:'' });
+  const [form, setForm] = useState({
+    fullName: user?.name || '',
+    dob: '',
+    phone: '',
+    email: user?.email || '',
+    currentAddress: '',
+    employerName: '',
+    jobTitle: '',
+    monthlyIncome: '',
+    timeAtJob: '',
+    prevLandlord: '',
+    prevRentDuration: '',
+    reasonLeaving: '',
+    occupants: '1',
+    hasPets: 'no',
+    petDetails: '',
+    moveInDate: '',
+    message: '',
+  });
 
   if (!property) { setPage('listings'); return null; }
 
-  const handleApply = async (e) => {
-    e.preventDefault();
+  const F = ({ label, name, type='text', placeholder='', options=null, rows=0 }) => (
+    <div style={S.formGroup}>
+      <label style={S.label}>{label}</label>
+      {options ? (
+        <select style={S.input} value={form[name]}
+          onChange={e => setForm(f=>({...f,[name]:e.target.value}))}>
+          {options.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+        </select>
+      ) : rows > 0 ? (
+        <textarea style={{...S.input, height:rows*40, resize:'vertical'}}
+          placeholder={placeholder} value={form[name]}
+          onChange={e => setForm(f=>({...f,[name]:e.target.value}))} />
+      ) : (
+        <input style={S.input} type={type} placeholder={placeholder}
+          value={form[name]}
+          onChange={e => setForm(f=>({...f,[name]:e.target.value}))} />
+      )}
+    </div>
+  );
+
+  const sectionStyle = {
+    background:'#fff', border:'1px solid #e5e7eb',
+    borderRadius:12, padding:24, marginBottom:20
+  };
+  const sectionTitle = {
+    fontSize:18, fontWeight:700, fontFamily:'Georgia,serif',
+    marginBottom:16, paddingBottom:12, borderBottom:'1px solid #f3f4f6'
+  };
+
+  const handleSubmit = async () => {
     setLoading(true); setMsg('');
     try {
       const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('hn_token');
-
-      // Step 1: Create application record
       const appRes = await fetch(`${base}/applications`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ propertyId: property.id, ...form })
+        headers: {'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+        body: JSON.stringify({
+          propertyId: property.id,
+          moveInDate: form.moveInDate,
+          message: form.message,
+          employerName: form.employerName,
+          annualIncome: form.monthlyIncome
+            ? String(parseInt(form.monthlyIncome.replace(/\D/g,'')) * 12) : '',
+          applicationDetails: form,
+        })
       });
       const appData = await appRes.json();
       if (!appRes.ok) throw new Error(appData.error || 'Failed to submit');
 
-      // Step 2: Create Stripe checkout session
       const checkoutRes = await fetch(`${base}/payments/create-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-        body: JSON.stringify({ propertyId: property.id, applicationId: appData.id })
+        headers: {'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+        body: JSON.stringify({
+          propertyId: property.id,
+          applicationId: appData.id
+        })
       });
       const checkoutData = await checkoutRes.json();
-      if (!checkoutRes.ok) throw new Error(checkoutData.error || 'Payment failed');
-
-      // Step 3: Redirect to Stripe
+      if (!checkoutRes.ok) throw new Error(checkoutData.error || 'Payment error');
       window.location.href = checkoutData.url;
 
     } catch(err) {
-      // If Stripe not set up yet, still mark as submitted
-      if (err.message.includes('Stripe') || err.message.includes('payment')) {
-        setSent(true);
+      if (err.message.toLowerCase().includes('stripe') ||
+          err.message.toLowerCase().includes('payment')) {
+        setStep(3);
       } else {
         setMsg('❌ ' + err.message);
+        setLoading(false);
       }
-    } finally { setLoading(false); }
+    }
   };
 
-  if (sent) return (
-    <div style={{ textAlign:'center', padding:'80px 24px' }}>
-      <div style={{ fontSize:64, marginBottom:16 }}>✅</div>
-      <h2 style={{ fontFamily:'Georgia,serif', fontSize:32, marginBottom:8 }}>Application submitted!</h2>
-      <p style={{ color:'#9ca3af', marginBottom:8 }}>Your application has been saved.</p>
-      <p style={{ color:'#9ca3af', marginBottom:28 }}>Add your Stripe keys to <code style={{background:'#f3f4f6',padding:'2px 6px',borderRadius:4}}>backend/.env</code> to enable real $35 payments.</p>
-      <button style={S.btnPrimary} onClick={() => setPage('dashboard')}>View my applications</button>
+  if (step === 3) return (
+    <div style={{textAlign:'center', padding:'80px 24px'}}>
+      <div style={{fontSize:64, marginBottom:16}}>✅</div>
+      <h2 style={{fontFamily:'Georgia,serif', fontSize:32, marginBottom:8}}>
+        Application submitted!
+      </h2>
+      <p style={{color:'#9ca3af', marginBottom:28}}>
+        Your application has been received. You'll hear back within 2-3 business days.
+      </p>
+      <button style={S.btnPrimary} onClick={() => setPage('dashboard')}>
+        View my applications
+      </button>
+    </div>
+  );
+
+  if (step === 2) return (
+    <div style={{maxWidth:620, margin:'40px auto', padding:'0 24px'}}>
+      <button style={{...S.navLink, color:'#9ca3af', marginBottom:20}}
+        onClick={() => setStep(1)}>← Edit application</button>
+      <h1 style={{...S.sectionTitle, marginBottom:4}}>Review your application</h1>
+      <p style={{color:'#9ca3af', fontSize:14, marginBottom:24}}>
+        {property.title} · {property.city}, {property.state}
+      </p>
+
+      <div style={sectionStyle}>
+        <div style={sectionTitle}>Personal Information</div>
+        {[
+          ['Full Name', form.fullName],
+          ['Date of Birth', form.dob],
+          ['Phone', form.phone],
+          ['Email', form.email],
+          ['Current Address', form.currentAddress]
+        ].map(([l,v]) => v && (
+          <div key={l} style={{display:'flex', justifyContent:'space-between',
+            padding:'8px 0', borderBottom:'1px solid #f9fafb', fontSize:14}}>
+            <span style={{color:'#9ca3af'}}>{l}</span>
+            <span style={{fontWeight:500}}>{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={sectionStyle}>
+        <div style={sectionTitle}>Employment</div>
+        {[
+          ['Employer', form.employerName],
+          ['Job Title', form.jobTitle],
+          ['Monthly Income', form.monthlyIncome],
+          ['Time at Job', form.timeAtJob]
+        ].map(([l,v]) => v && (
+          <div key={l} style={{display:'flex', justifyContent:'space-between',
+            padding:'8px 0', borderBottom:'1px solid #f9fafb', fontSize:14}}>
+            <span style={{color:'#9ca3af'}}>{l}</span>
+            <span style={{fontWeight:500}}>{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={sectionStyle}>
+        <div style={sectionTitle}>Occupancy</div>
+        {[
+          ['Occupants', form.occupants],
+          ['Pets', form.hasPets==='yes' ? `Yes — ${form.petDetails}` : 'No'],
+          ['Move-in Date', form.moveInDate]
+        ].map(([l,v]) => v && (
+          <div key={l} style={{display:'flex', justifyContent:'space-between',
+            padding:'8px 0', borderBottom:'1px solid #f9fafb', fontSize:14}}>
+            <span style={{color:'#9ca3af'}}>{l}</span>
+            <span style={{fontWeight:500}}>{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{background:'#f0f9f4', border:'1px solid #c8e8d8',
+        borderRadius:10, padding:20, margin:'20px 0',
+        display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+        <div>
+          <div style={{fontWeight:600, color:'#1a6b4a'}}>Application fee</div>
+          <div style={{fontSize:13, color:'#9ca3af'}}>
+            One-time · non-refundable · processed by Stripe
+          </div>
+        </div>
+        <div style={{fontSize:32, fontWeight:700,
+          fontFamily:'Georgia,serif', color:'#1a6b4a'}}>$35</div>
+      </div>
+
+      {msg && <p style={{color:'#dc2626', fontSize:13, marginBottom:12}}>{msg}</p>}
+
+      <button style={{...S.btnAccent, width:'100%', padding:16, fontSize:16}}
+        onClick={handleSubmit} disabled={loading}>
+        {loading ? 'Processing...' : 'Submit application & pay $35 →'}
+      </button>
+      <p style={{fontSize:12, color:'#9ca3af', textAlign:'center', marginTop:10}}>
+        You'll be redirected to Stripe to complete your secure payment
+      </p>
     </div>
   );
 
   return (
-    <div style={{ maxWidth:580, margin:'40px auto', padding:'0 24px' }}>
-      <button style={{ ...S.navLink, color:'#9ca3af', marginBottom:20 }} onClick={() => setPage('property')}>← Back</button>
-      <h1 style={{ ...S.sectionTitle, marginBottom:4 }}>Apply for {property.title}</h1>
-      <p style={{ color:'#9ca3af', marginBottom:24 }}>{property.city}, {property.state} · ${property.price?.toLocaleString()}{property.type==='rent'?'/mo':''}</p>
-      <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:24 }}>
-        <div style={{ background:'#f9fafb', borderRadius:8, padding:14, marginBottom:20 }}>
-          <div style={{ fontSize:13, color:'#6b7280' }}>Applying as</div>
-          <div style={{ fontWeight:500, marginTop:2 }}>{user?.name} · {user?.email}</div>
-        </div>
-        <form onSubmit={handleApply}>
-          <div style={S.formGroup}>
-            <label style={S.label}>Desired move-in date (optional)</label>
-            <input style={S.input} type="date" value={form.moveInDate} onChange={e=>setForm(f=>({...f,moveInDate:e.target.value}))} />
-          </div>
-          <div style={S.formGroup}>
-            <label style={S.label}>Message to landlord (optional)</label>
-            <textarea style={{ ...S.input, height:90, resize:'vertical' }} placeholder="Introduce yourself..." value={form.message} onChange={e=>setForm(f=>({...f,message:e.target.value}))} />
-          </div>
-          <div style={{ background:'#f0f9f4', border:'1px solid #c8e8d8', borderRadius:8, padding:14, margin:'16px 0' }}>
-            <p style={{ fontSize:13, color:'#1a6b4a', marginBottom:4 }}>One-time application fee via Stripe</p>
-            <strong style={{ fontSize:24, color:'#1a6b4a' }}>$35.00</strong>
-          </div>
-          {msg && <p style={{ color:'#dc2626', fontSize:13, marginBottom:12 }}>{msg}</p>}
-          <button type="submit" style={{ ...S.btnAccent, width:'100%', padding:14, fontSize:15 }} disabled={loading}>
-            {loading ? 'Processing...' : 'Continue to payment — $35'}
-          </button>
-        </form>
+    <div style={{maxWidth:620, margin:'40px auto', padding:'0 24px 60px'}}>
+      <button style={{...S.navLink, color:'#9ca3af', marginBottom:20}}
+        onClick={() => setPage('property')}>← Back to property</button>
+
+      <div style={{background:'linear-gradient(135deg,#0a2e1c,#1a6b4a)',
+        borderRadius:12, padding:24, color:'#fff', marginBottom:24}}>
+        <h1 style={{fontFamily:'Georgia,serif', fontSize:24, marginBottom:4}}>
+          Rental Application
+        </h1>
+        <p style={{opacity:0.8, fontSize:14, marginBottom:8}}>
+          {property.title} · {property.city}, {property.state}
+          · ${property.price?.toLocaleString()}/mo
+        </p>
+        <p style={{fontSize:13, opacity:0.7}}>
+          Complete all sections to submit your application.
+          All fields are required unless marked optional.
+        </p>
       </div>
+
+      <form onSubmit={e => { e.preventDefault(); setStep(2); }}>
+
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>Personal Information</div>
+          <F label="Full Name" name="fullName" placeholder="John Smith" />
+          <F label="Date of Birth" name="dob" type="date" />
+          <F label="Phone Number" name="phone"
+            type="tel" placeholder="(555) 000-0000" />
+          <F label="Email Address" name="email"
+            type="email" placeholder="john@example.com" />
+          <F label="Current Address" name="currentAddress"
+            placeholder="123 Main St, City, State ZIP" />
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>Employment Information</div>
+          <F label="Employer Name" name="employerName" placeholder="Acme Corp" />
+          <F label="Job Title" name="jobTitle" placeholder="Software Engineer" />
+          <F label="Monthly Income (Gross)" name="monthlyIncome"
+            placeholder="$5,000" />
+          <F label="Time at Current Job" name="timeAtJob"
+            placeholder="2 years, 3 months" />
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>Rental History</div>
+          <F label="Previous Landlord Name (optional)"
+            name="prevLandlord" placeholder="Jane Doe" />
+          <F label="How Long Did You Rent? (optional)"
+            name="prevRentDuration" placeholder="1 year, 6 months" />
+          <F label="Reason for Leaving (optional)"
+            name="reasonLeaving"
+            placeholder="Briefly describe why you're moving..."
+            rows={2} />
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={sectionTitle}>Occupancy Details</div>
+          <F label="Number of Occupants" name="occupants"
+            options={[['1','1'],['2','2'],['3','3'],['4','4'],['5','5+']]} />
+          <F label="Do You Have Pets?" name="hasPets"
+            options={[['no','No'],['yes','Yes']]} />
+          {form.hasPets === 'yes' && (
+            <F label="Pet Details" name="petDetails"
+              placeholder="e.g. 1 small dog, 10kg" />
+          )}
+          <F label="Desired Move-in Date" name="moveInDate" type="date" />
+          <F label="Message to Landlord (optional)"
+            name="message"
+            placeholder="Introduce yourself..."
+            rows={3} />
+        </div>
+
+        <div style={{background:'#fffbf0', border:'1px solid #fde68a',
+          borderRadius:10, padding:16, marginBottom:20}}>
+          <div style={{fontWeight:600, fontSize:14,
+            color:'#92400e', marginBottom:4}}>📎 Documents</div>
+          <p style={{fontSize:13, color:'#92400e'}}>
+            After submitting, email your Government ID and proof of income to{' '}
+            <strong>admin@homenest.com</strong> to complete your application.
+          </p>
+        </div>
+
+        <button type="submit"
+          style={{...S.btnPrimary, width:'100%', padding:16, fontSize:16}}>
+          Review application →
+        </button>
+      </form>
     </div>
   );
 }
