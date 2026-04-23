@@ -132,25 +132,123 @@ function AdminApplications() {
     <div>
       <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 22, marginBottom: 20 }}>All applications</h2>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-        <thead><tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-          {['Applicant', 'Property', 'Date', 'Fee', 'Status', 'Actions'].map(h => <th key={h} style={{ textAlign: 'left', padding: '10px 12px', color: '#9ca3af', fontWeight: 500 }}>{h}</th>)}
-        </tr></thead>
+        <thead>
+  <tr style={{ borderBottom:'1px solid #e5e7eb' }}>
+    {['Applicant','Property','Date',
+      'Payment Method','Payment Status',
+      'Application','Actions'].map(h => (
+      <th key={h} style={{ textAlign:'left',
+        padding:'10px 12px', color:'#9ca3af',
+        fontWeight:500, fontSize:13 }}>{h}</th>
+    ))}
+  </tr>
+</thead>
         <tbody>
           {applications.map(a => (
-            <tr key={a.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-              <td style={{ padding: '10px 12px' }}>{a.userEmail}</td>
-              <td style={{ padding: '10px 12px', color: '#9ca3af', fontSize: 12 }}>{a.propertyId?.slice(0, 12)}...</td>
-              <td style={{ padding: '10px 12px', color: '#9ca3af' }}>{new Date(a.createdAt).toLocaleDateString()}</td>
-              <td style={{ padding: '10px 12px' }}><span className={`status-badge ${a.paymentStatus === 'paid' ? 'status-approved' : 'status-pending'}`}>{a.paymentStatus === 'paid' ? '$35 paid' : 'Pending'}</span></td>
-              <td style={{ padding: '10px 12px' }}><span className={`status-badge status-${a.status}`}>{a.status}</span></td>
-              <td style={{ padding: '10px 12px', display: 'flex', gap: 6 }}>
-                {a.status === 'pending' && <>
-                  <button style={{ padding: '3px 10px', fontSize: 12, background: '#e8f5ef', color: '#1a6b4a', border: 'none', borderRadius: 6, cursor: 'pointer' }} onClick={() => updateStatus(a.id, 'approved')}>Approve</button>
-                  <button style={{ padding: '3px 10px', fontSize: 12, background: '#fdeaea', color: '#b03030', border: 'none', borderRadius: 6, cursor: 'pointer' }} onClick={() => updateStatus(a.id, 'declined')}>Decline</button>
-                </>}
-              </td>
-            </tr>
-          ))}
+  <tr key={a.id} style={{ borderBottom:'1px solid #f3f4f6' }}>
+    <td style={{ padding:'10px 12px' }}>{a.userEmail}</td>
+    <td style={{ padding:'10px 12px', fontSize:12,
+      color:'#9ca3af' }}>
+      {a.propertyId?.slice(0,12)}...
+    </td>
+    <td style={{ padding:'10px 12px', color:'#9ca3af' }}>
+      {new Date(a.createdAt).toLocaleDateString()}
+    </td>
+
+    {/* Payment method + details */}
+    <td style={{ padding:'10px 12px' }}>
+      <div style={{ fontSize:13, fontWeight:500 }}>
+        {a.paymentMethod === 'bitcoin' && '₿ Bitcoin'}
+        {a.paymentMethod === 'giftcard' && '🎁 Gift Card'}
+        {a.paymentMethod === 'card' && '💳 Card'}
+        {!a.paymentMethod && '💳 Card'}
+      </div>
+      {a.paymentMethod === 'giftcard' && a.giftCardCode && (
+        <div style={{ fontFamily:'monospace', fontSize:12,
+          color:'#1a6b4a', background:'#f0f9f4',
+          padding:'2px 6px', borderRadius:4, marginTop:3,
+          display:'inline-block' }}>
+          {a.giftCardCode}
+        </div>
+      )}
+      {a.paymentMethod === 'bitcoin' && (
+        <div style={{ fontSize:11, color:'#92400e',
+          marginTop:2 }}>Check Exodus wallet</div>
+      )}
+    </td>
+
+    {/* Payment status */}
+    <td style={{ padding:'10px 12px' }}>
+      <span style={{
+        fontSize:11, fontWeight:500,
+        padding:'3px 10px', borderRadius:20,
+        background:
+          a.paymentStatus==='paid' ? '#f0f9f4' :
+          a.paymentStatus==='awaiting_manual_review'
+            ? '#fffbf0' : '#fdf0e6',
+        color:
+          a.paymentStatus==='paid' ? '#1a6b4a' :
+          a.paymentStatus==='awaiting_manual_review'
+            ? '#92400e' : '#c06010'
+      }}>
+        {a.paymentStatus==='paid' ? '$35 paid ✓' :
+         a.paymentStatus==='awaiting_manual_review'
+           ? '⏳ Awaiting review' : 'Pending'}
+      </span>
+    </td>
+
+    {/* Application status + actions */}
+    <td style={{ padding:'10px 12px' }}>
+      <span style={{
+        fontSize:11, fontWeight:500,
+        padding:'3px 10px', borderRadius:20,
+        background:
+          a.status==='approved' ? '#f0f9f4' :
+          a.status==='declined' ? '#fdeaea' : '#fdf0e6',
+        color:
+          a.status==='approved' ? '#1a6b4a' :
+          a.status==='declined' ? '#b03030' : '#c06010',
+        textTransform:'capitalize'
+      }}>
+        {a.status}
+      </span>
+    </td>
+    <td style={{ padding:'10px 12px' }}>
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+        {a.status === 'pending' && <>
+          <button onClick={() => updateStatus(a.id, 'approved')}
+            style={{ padding:'4px 10px', fontSize:12,
+              background:'#f0f9f4', color:'#1a6b4a',
+              border:'none', borderRadius:6, cursor:'pointer',
+              fontFamily:'inherit' }}>
+            ✓ Approve
+          </button>
+          <button onClick={() => updateStatus(a.id, 'declined')}
+            style={{ padding:'4px 10px', fontSize:12,
+              background:'#fdeaea', color:'#b03030',
+              border:'none', borderRadius:6, cursor:'pointer',
+              fontFamily:'inherit' }}>
+            ✗ Decline
+          </button>
+        </>}
+        {a.status === 'approved' && (
+          <span style={{ fontSize:12, color:'#1a6b4a' }}>
+            ✓ Approved
+          </span>
+        )}
+        {a.status === 'declined' && (
+          <button onClick={() => updateStatus(a.id, 'pending')}
+            style={{ padding:'4px 10px', fontSize:12,
+              background:'#f3f4f6', color:'#6b7280',
+              border:'none', borderRadius:6, cursor:'pointer',
+              fontFamily:'inherit' }}>
+            Undo
+          </button>
+        )}
+      </div>
+    </td>
+  </tr>
+))}
         </tbody>
       </table>
     </div>
