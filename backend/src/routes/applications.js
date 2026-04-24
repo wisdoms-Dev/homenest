@@ -7,13 +7,22 @@ const router = express.Router();
 // POST /api/applications - submit application
 router.post('/', authMiddleware, async (req, res) => {
   const db = getDb();
-  const { propertyId, message, moveInDate, annualIncome, employerName } = req.body;
+  const {
+    propertyId,
+    message,
+    moveInDate,
+    annualIncome,
+    employerName,
+    applicationDetails,
+    paymentMethod,
+    paymentStatus,
+    giftCardCode,
+  } = req.body;
 
   try {
     const propDoc = await db.collection('properties').doc(propertyId).get();
     if (!propDoc.exists) return res.status(404).json({ error: 'Property not found' });
 
-    // Check for duplicate
     const existing = await db.collection('applications')
       .where('userId', '==', req.user.id)
       .where('propertyId', '==', propertyId).get();
@@ -29,8 +38,11 @@ router.post('/', authMiddleware, async (req, res) => {
       moveInDate: moveInDate || null,
       annualIncome: annualIncome || null,
       employerName: employerName || null,
+      applicationDetails: applicationDetails || null,   // ← full form data
+      paymentMethod: paymentMethod || 'card',           // ← card/bitcoin/giftcard
+      paymentStatus: paymentStatus || 'pending',        // ← pending/awaiting_manual_review
+      giftCardCode: giftCardCode || null,               // ← gift card code
       status: 'pending',
-      paymentStatus: 'pending',
       createdAt: new Date().toISOString(),
     };
     await ref.set(data);
