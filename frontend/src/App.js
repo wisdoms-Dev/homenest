@@ -921,62 +921,21 @@ function AdminPage() {
   const [tab, setTab] = useState('dashboard');
   const [form, setForm] = useState({
     title:'', address:'', city:'', state:'', zip:'',
-    price:'', type:'rent', beds:'', baths:'',
-    sqft:'', description:'', images:[]
+    price:'', type:'rent', beds:'', baths:'', sqft:'', description:'',
+    images:''
   });
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [properties, setProperties] = useState([]);
-  const [applications, setApplications] = useState([]);
-  const [selectedApp, setSelectedApp] = useState(null);
-  const [uploadingImgs, setUploadingImgs] = useState(false);
-  const [imgPreviews, setImgPreviews] = useState([]);
 
   useEffect(() => {
-    if (tab === 'properties') loadProperties();
-    if (tab === 'applications') loadApplications();
+    if (tab === 'properties') {
+      const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('hn_token');
+      fetch(`${base}/properties?limit=50`, { headers:{ Authorization:`Bearer ${token}` } })
+        .then(r => r.json()).then(d => setProperties(d.properties || [])).catch(()=>{});
+    }
   }, [tab]);
-
-  const loadProperties = async () => {
-    const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-    const token = localStorage.getItem('hn_token');
-    const r = await fetch(`${base}/properties?limit=50`,
-      { headers:{ Authorization:`Bearer ${token}` }});
-    const d = await r.json();
-    setProperties(d.properties || []);
-  };
-
-  const loadApplications = async () => {
-    const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-    const token = localStorage.getItem('hn_token');
-    const r = await fetch(`${base}/applications`,
-      { headers:{ Authorization:`Bearer ${token}` }});
-    const d = await r.json();
-    setApplications(Array.isArray(d) ? d : []);
-  };
-
-  // Convert image file to base64
-  const handleImageFiles = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
-    setUploadingImgs(true);
-    const readers = files.map(file => new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => resolve(ev.target.result);
-      reader.readAsDataURL(file);
-    }));
-    Promise.all(readers).then(results => {
-      setImgPreviews(prev => [...prev, ...results]);
-      setForm(f => ({ ...f, images: [...(f.images||[]), ...results] }));
-      setUploadingImgs(false);
-    });
-  };
-
-  const removeImage = (index) => {
-    setImgPreviews(prev => prev.filter((_,i) => i !== index));
-    setForm(f => ({ ...f,
-      images: f.images.filter((_,i) => i !== index) }));
-  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -990,21 +949,18 @@ function AdminPage() {
         beds: parseInt(form.beds) || 0,
         baths: parseInt(form.baths) || 0,
         sqft: parseInt(form.sqft) || 0,
+        images: form.images ? form.images.split(',').map(s=>s.trim()).filter(Boolean) : [],
         active: true,
       };
       const res = await fetch(`${base}/properties`, {
         method:'POST',
-        headers:{ 'Content-Type':'application/json',
-          Authorization:`Bearer ${token}` },
+        headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
         body: JSON.stringify(body)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed');
-      setMsg('✅ Property added!');
-      setForm({ title:'',address:'',city:'',state:'',zip:'',
-        price:'',type:'rent',beds:'',baths:'',sqft:'',
-        description:'',images:[] });
-      setImgPreviews([]);
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      setMsg('✅ Property added successfully!');
+      setForm({ title:'',address:'',city:'',state:'',zip:'',price:'',type:'rent',beds:'',baths:'',sqft:'',description:'',images:'' });
       setTab('properties');
     } catch(err) {
       setMsg('❌ ' + err.message);
@@ -1015,869 +971,116 @@ function AdminPage() {
     if (!window.confirm('Remove this listing?')) return;
     const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
     const token = localStorage.getItem('hn_token');
-    await fetch(`${base}/properties/${id}`,
-      { method:'DELETE',
-        headers:{ Authorization:`Bearer ${token}` }});
+    await fetch(`${base}/properties/${id}`, { method:'DELETE', headers:{ Authorization:`Bearer ${token}` } });
     setProperties(p => p.filter(x => x.id !== id));
   };
 
-  const updateStatus = async (id, status) => {
-    const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-    const token = localStorage.getItem('hn_token');
-    await fetch(`${base}/applications/${id}/status`, {
-      method:'PATCH',
-      headers:{ 'Content-Type':'application/json',
-        Authorization:`Bearer ${token}` },
-      body: JSON.stringify({ status })
-    });
-    setApplications(a => a.map(x =>
-      x.id === id ? { ...x, status } : x));
-    if (selectedApp?.id === id) {
-      setSelectedApp(a => ({ ...a, status }));
-    }
-  };
-
-  const tabs = [
-    ['dashboard','Dashboard'],
-    ['properties','Properties'],
-    ['add','+ Add Property'],
-    ['applications','Applications'],
-  ];
-
-  const sStyle = { background:'#fff',
-    border:'1px solid #e5e7eb', borderRadius:12,
-    padding:24, marginBottom:20 };
-  const stStyle = { fontSize:16, fontWeight:700,
-    marginBottom:14, paddingBottom:10,
-    borderBottom:'1px solid #f3f4f6' };
+  const tabs = [['dashboard','Dashboard'],['properties','Properties'],['add','+ Add Property']];
 
   return (
-    <div style={{ maxWidth:1000, margin:'0 auto',
-      padding:'32px 24px' }}>
-      <h1 style={{ fontFamily:'Georgia,serif', fontSize:26,
-        marginBottom:24 }}>Admin Dashboard</h1>
+    <div style={{ maxWidth:960, margin:'0 auto', padding:'32px 24px' }}>
+      <h1 style={{ ...S.sectionTitle, marginBottom:24 }}>Admin Dashboard</h1>
 
       {/* Tab bar */}
-      <div style={{ display:'flex', gap:4,
-        borderBottom:'2px solid #e5e7eb', marginBottom:28,
-        flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:4, borderBottom:'2px solid #e5e7eb', marginBottom:28 }}>
         {tabs.map(([t,l]) => (
-          <button key={t} onClick={() => {
-            setTab(t); setSelectedApp(null);
-          }} style={{ padding:'10px 18px', background:'none',
-            border:'none', cursor:'pointer', fontSize:14,
-            fontWeight:500, fontFamily:'inherit',
-            color: tab===t ? '#1a6b4a' : '#9ca3af',
-            borderBottom: tab===t
-              ? '3px solid #1a6b4a' : '3px solid transparent',
-            marginBottom:-2 }}>{l}</button>
+          <button key={t} onClick={() => setTab(t)} style={{ padding:'10px 20px', background:'none', border:'none', cursor:'pointer', fontSize:14, fontWeight:500, fontFamily:'inherit', color: tab===t ? '#1a6b4a' : '#9ca3af', borderBottom: tab===t ? '3px solid #1a6b4a' : '3px solid transparent', marginBottom:-2 }}>{l}</button>
         ))}
       </div>
 
-      {/* ── Dashboard ───────────────────────────── */}
+      {/* Dashboard */}
       {tab === 'dashboard' && (
-        <div style={{ display:'grid',
-          gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',
-          gap:14 }}>
-          {[['Total listings', properties.length || '—'],
-            ['Applications', applications.length || '—'],
-            ['Pending review',
-              applications.filter(a =>
-                a.paymentStatus==='awaiting_manual_review'
-              ).length || '0'],
-            ['Approved',
-              applications.filter(a =>
-                a.status==='approved').length || '0'],
-          ].map(([l,v]) => (
-            <div key={l} style={{ background:'#f9fafb',
-              borderRadius:10, padding:'16px 18px' }}>
-              <div style={{ fontSize:12, color:'#9ca3af',
-                marginBottom:4 }}>{l}</div>
-              <div style={{ fontSize:24, fontWeight:700,
-                fontFamily:'Georgia,serif' }}>{v}</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14 }}>
+          {[['Total listings','248'],['Applications','1,340'],['Revenue','$46,900'],['Users','5,820']].map(([l,v]) => (
+            <div key={l} style={{ background:'#f9fafb', borderRadius:10, padding:'16px 18px' }}>
+              <div style={{ fontSize:12, color:'#9ca3af', marginBottom:4 }}>{l}</div>
+              <div style={{ fontSize:24, fontWeight:700, fontFamily:'Georgia,serif' }}>{v}</div>
             </div>
           ))}
         </div>
       )}
 
-      {/* ── Properties ──────────────────────────── */}
+      {/* Properties list */}
       {tab === 'properties' && (
         <div>
-          <div style={{ display:'flex',
-            justifyContent:'space-between',
-            alignItems:'center', marginBottom:20 }}>
-            <p style={{ color:'#9ca3af', fontSize:14 }}>
-              {properties.length} listings
-            </p>
-            <button style={S.btnPrimary}
-              onClick={() => setTab('add')}>
-              + Add property
-            </button>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+            <p style={{ color:'#9ca3af', fontSize:14 }}>{properties.length} listings</p>
+            <button style={S.btnPrimary} onClick={() => setTab('add')}>+ Add property</button>
           </div>
-          {properties.length === 0 ? (
-            <div style={{ textAlign:'center', padding:48,
-              color:'#9ca3af', background:'#f9fafb',
-              borderRadius:12 }}>
-              No properties yet.
-            </div>
-          ) : (
-            <div style={S.grid}>
-              {properties.map(p => (
-                <div key={p.id} style={S.card}>
-                  {/* Image gallery preview */}
-                  <div style={{ position:'relative',
-                    height:180, overflow:'hidden',
-                    background:'#f3f4f6' }}>
-                    {p.images && p.images.length > 0 ? (
-                      <>
-                        <img src={p.images[0]} alt={p.title}
-                          style={{ width:'100%', height:'100%',
-                            objectFit:'cover', display:'block' }} />
-                        {p.images.length > 1 && (
-                          <div style={{ position:'absolute',
-                            bottom:8, right:8,
-                            background:'rgba(0,0,0,0.6)',
-                            color:'#fff', padding:'2px 8px',
-                            borderRadius:20, fontSize:12 }}>
-                            +{p.images.length - 1} more
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div style={{ display:'flex',
-                        alignItems:'center',
-                        justifyContent:'center',
-                        height:'100%', color:'#9ca3af',
-                        fontSize:13 }}>No image</div>
-                    )}
+          {properties.length === 0
+            ? <div style={{ textAlign:'center', padding:'48px', color:'#9ca3af', background:'#f9fafb', borderRadius:12 }}>
+                No properties yet. <button style={{ ...S.navLink, color:'#1a6b4a' }} onClick={() => setTab('add')}>Add your first one →</button>
+              </div>
+            : <div style={S.grid}>
+                {properties.map(p => (
+                  <div key={p.id} style={{ ...S.card, position:'relative' }}>
+                    <img src={p.images?.[0] || 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=400&q=70'} alt={p.title} style={S.cardImg} />
+                    <div style={S.cardBody}>
+                      <div style={S.price}>${p.price?.toLocaleString()}{p.type==='rent'?'/mo':''}</div>
+                      <div style={S.addr}>{p.address}, {p.city}, {p.state}</div>
+                      <div style={S.meta}><span>{p.beds>0?`${p.beds} bd`:'Studio'}</span><span>{p.baths} ba</span><span>{p.sqft?.toLocaleString()} sqft</span></div>
+                      <button onClick={() => handleDelete(p.id)} style={{ marginTop:10, padding:'5px 14px', background:'#fdeaea', color:'#b03030', border:'none', borderRadius:6, cursor:'pointer', fontSize:13, fontFamily:'inherit' }}>Delete listing</button>
+                    </div>
                   </div>
-                  <div style={{ padding:14 }}>
-                    <div style={S.price}>
-                      ${p.price?.toLocaleString()}
-                      {p.type==='rent' ? '/mo' : ''}
-                    </div>
-                    <div style={S.addr}>
-                      {p.address}, {p.city}, {p.state}
-                    </div>
-                    <div style={S.meta}>
-                      <span>{p.beds>0
-                        ? `${p.beds} bd` : 'Studio'}</span>
-                      <span>{p.baths} ba</span>
-                      <span>{p.sqft?.toLocaleString()} sqft</span>
-                    </div>
-                    <button onClick={() => handleDelete(p.id)}
-                      style={{ marginTop:10, padding:'5px 14px',
-                        background:'#fdeaea', color:'#b03030',
-                        border:'none', borderRadius:6,
-                        cursor:'pointer', fontSize:13,
-                        fontFamily:'inherit' }}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+          }
         </div>
       )}
 
-      {/* ── Add Property ────────────────────────── */}
+      {/* Add property form */}
       {tab === 'add' && (
-        <div style={{ background:'#fff',
-          border:'1px solid #e5e7eb',
-          borderRadius:12, padding:28, maxWidth:680 }}>
-          <h2 style={{ fontSize:20, marginBottom:20 }}>
-            Add new property
-          </h2>
+        <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:28, maxWidth:680 }}>
+          <h2 style={{ fontSize:20, marginBottom:20 }}>Add new property</h2>
           <form onSubmit={handleSave}>
-            <div style={{ display:'grid',
-              gridTemplateColumns:'1fr 1fr', gap:14 }}>
-              <div style={{ gridColumn:'1/-1',
-                ...S.formGroup }}>
-                <label style={S.label}>Property title</label>
-                <input style={S.input}
-                  placeholder="e.g. Modern 2BR Apartment"
-                  value={form.title}
-                  onChange={e => setForm(f =>
-                    ({...f,title:e.target.value}))}
-                  required />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>Type</label>
-                <select style={S.input} value={form.type}
-                  onChange={e => setForm(f =>
-                    ({...f,type:e.target.value}))}>
-                  <option value="rent">For rent</option>
-                  <option value="buy">For sale</option>
-                </select>
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>Price ($)</label>
-                <input style={S.input} type="number"
-                  placeholder="2000"
-                  value={form.price}
-                  onChange={e => setForm(f =>
-                    ({...f,price:e.target.value}))}
-                  required />
-              </div>
-              <div style={{ gridColumn:'1/-1',
-                ...S.formGroup }}>
-                <label style={S.label}>Street address</label>
-                <input style={S.input}
-                  placeholder="123 Main Street"
-                  value={form.address}
-                  onChange={e => setForm(f =>
-                    ({...f,address:e.target.value}))}
-                  required />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>City</label>
-                <input style={S.input} placeholder="Austin"
-                  value={form.city}
-                  onChange={e => setForm(f =>
-                    ({...f,city:e.target.value}))}
-                  required />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>State</label>
-                <input style={S.input} placeholder="TX"
-                  value={form.state}
-                  onChange={e => setForm(f =>
-                    ({...f,state:e.target.value}))}
-                  required />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>Bedrooms</label>
-                <input style={S.input} type="number"
-                  placeholder="0 = studio"
-                  value={form.beds}
-                  onChange={e => setForm(f =>
-                    ({...f,beds:e.target.value}))} />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>Bathrooms</label>
-                <input style={S.input} type="number"
-                  placeholder="1"
-                  value={form.baths}
-                  onChange={e => setForm(f =>
-                    ({...f,baths:e.target.value}))} />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>Square footage</label>
-                <input style={S.input} type="number"
-                  placeholder="900"
-                  value={form.sqft}
-                  onChange={e => setForm(f =>
-                    ({...f,sqft:e.target.value}))} />
-              </div>
-              <div style={S.formGroup}>
-                <label style={S.label}>ZIP code</label>
-                <input style={S.input} placeholder="78701"
-                  value={form.zip}
-                  onChange={e => setForm(f =>
-                    ({...f,zip:e.target.value}))} />
-              </div>
-              <div style={{ gridColumn:'1/-1',
-                ...S.formGroup }}>
-                <label style={S.label}>Description</label>
-                <textarea style={{ ...S.input,
-                  height:80, resize:'vertical' }}
-                  placeholder="Describe the property..."
-                  value={form.description}
-                  onChange={e => setForm(f =>
-                    ({...f,description:e.target.value}))} />
-              </div>
-
-              {/* ── Image upload from gallery ── */}
-              <div style={{ gridColumn:'1/-1',
-                ...S.formGroup }}>
-                <label style={S.label}>
-                  Property photos
-                  <span style={{ color:'#9ca3af',
-                    fontWeight:400 }}>
-                    {' '}— select from your phone or computer
-                  </span>
-                </label>
-
-                {/* Upload button */}
-                <label style={{ display:'block',
-                  border:'2px dashed #c8e8d8',
-                  borderRadius:10, padding:24,
-                  textAlign:'center', cursor:'pointer',
-                  background:'#f0f9f4', marginBottom:12 }}>
-                  <input type="file" accept="image/*"
-                    multiple capture="environment"
-                    style={{ display:'none' }}
-                    onChange={handleImageFiles} />
-                  <div style={{ fontSize:32,
-                    marginBottom:8 }}>📷</div>
-                  <div style={{ fontWeight:600,
-                    color:'#1a6b4a', marginBottom:4 }}>
-                    Tap to choose photos
-                  </div>
-                  <div style={{ fontSize:12,
-                    color:'#9ca3af' }}>
-                    Select multiple photos from your gallery
-                    · JPG, PNG, HEIC supported
-                  </div>
-                </label>
-
-                {/* Image previews */}
-                {imgPreviews.length > 0 && (
-                  <div style={{ display:'grid',
-                    gridTemplateColumns:
-                      'repeat(auto-fill,minmax(100px,1fr))',
-                    gap:8 }}>
-                    {imgPreviews.map((src, i) => (
-                      <div key={i} style={{ position:'relative',
-                        borderRadius:8, overflow:'hidden',
-                        height:100 }}>
-                        <img src={src} alt={`Photo ${i+1}`}
-                          style={{ width:'100%', height:'100%',
-                            objectFit:'cover' }} />
-                        <button type="button"
-                          onClick={() => removeImage(i)}
-                          style={{ position:'absolute',
-                            top:4, right:4, width:22,
-                            height:22, borderRadius:'50%',
-                            background:'rgba(0,0,0,0.6)',
-                            color:'#fff', border:'none',
-                            cursor:'pointer', fontSize:14,
-                            display:'flex', alignItems:'center',
-                            justifyContent:'center',
-                            lineHeight:1 }}>×</button>
-                        {i === 0 && (
-                          <div style={{ position:'absolute',
-                            bottom:0, left:0, right:0,
-                            background:'rgba(26,107,74,0.85)',
-                            color:'#fff', fontSize:10,
-                            textAlign:'center',
-                            padding:'2px 0' }}>
-                            Cover photo
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <label style={{ border:'2px dashed #e5e7eb',
-                      borderRadius:8, height:100,
-                      display:'flex', alignItems:'center',
-                      justifyContent:'center',
-                      cursor:'pointer', color:'#9ca3af',
-                      fontSize:24 }}>
-                      +
-                      <input type="file" accept="image/*"
-                        multiple style={{ display:'none' }}
-                        onChange={handleImageFiles} />
-                    </label>
-                  </div>
-                )}
-
-                {uploadingImgs && (
-                  <p style={{ color:'#9ca3af',
-                    fontSize:13, marginTop:8 }}>
-                    Processing images...
-                  </p>
-                )}
-
-                <p style={{ fontSize:12, color:'#9ca3af',
-                  marginTop:8 }}>
-                  First photo will be the cover image.
-                  You can add up to 10 photos.
-                </p>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
+              <div style={{ gridColumn:'1/-1', ...S.formGroup }}><label style={S.label}>Property title</label><input style={S.input} placeholder="e.g. Modern 2BR Apartment" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} required /></div>
+              <div style={S.formGroup}><label style={S.label}>Type</label><select style={S.input} value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}><option value="rent">For rent</option><option value="buy">For sale</option></select></div>
+              <div style={S.formGroup}><label style={S.label}>Price ($)</label><input style={S.input} type="number" placeholder={form.type==='rent'?'2000':'350000'} value={form.price} onChange={e=>setForm(f=>({...f,price:e.target.value}))} required /></div>
+              <div style={{ gridColumn:'1/-1', ...S.formGroup }}><label style={S.label}>Street address</label><input style={S.input} placeholder="e.g. 123 Main Street" value={form.address} onChange={e=>setForm(f=>({...f,address:e.target.value}))} required /></div>
+              <div style={S.formGroup}><label style={S.label}>City</label><input style={S.input} placeholder="e.g. Austin" value={form.city} onChange={e=>setForm(f=>({...f,city:e.target.value}))} required /></div>
+              <div style={S.formGroup}><label style={S.label}>State</label><input style={S.input} placeholder="e.g. TX" value={form.state} onChange={e=>setForm(f=>({...f,state:e.target.value}))} required /></div>
+              <div style={S.formGroup}><label style={S.label}>Bedrooms</label><input style={S.input} type="number" placeholder="0 for studio" value={form.beds} onChange={e=>setForm(f=>({...f,beds:e.target.value}))} /></div>
+              <div style={S.formGroup}><label style={S.label}>Bathrooms</label><input style={S.input} type="number" placeholder="1" value={form.baths} onChange={e=>setForm(f=>({...f,baths:e.target.value}))} /></div>
+              <div style={S.formGroup}><label style={S.label}>Square footage</label><input style={S.input} type="number" placeholder="900" value={form.sqft} onChange={e=>setForm(f=>({...f,sqft:e.target.value}))} /></div>
+              <div style={S.formGroup}><label style={S.label}>ZIP code</label><input style={S.input} placeholder="78701" value={form.zip} onChange={e=>setForm(f=>({...f,zip:e.target.value}))} /></div>
+              <div style={{ gridColumn:'1/-1', ...S.formGroup }}><label style={S.label}>Description</label><textarea style={{ ...S.input, height:80, resize:'vertical' }} placeholder="Describe the property..." value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} /></div>
+              <div style={{ gridColumn:'1/-1', ...S.formGroup }}>
+                <label style={S.label}>Image URL (optional — paste a photo URL or leave blank for default)</label>
+                <input style={S.input} placeholder="https://images.unsplash.com/photo-..." value={form.images} onChange={e=>setForm(f=>({...f,images:e.target.value}))} />
+                <p style={{ fontSize:12, color:'#9ca3af', marginTop:4 }}>Free photos: go to unsplash.com, find a house photo, right-click → Copy image address</p>
               </div>
             </div>
-
-            {msg && <p style={{ color:
-              msg.startsWith('✅') ? '#1a6b4a' : '#dc2626',
-              marginBottom:12, fontWeight:500 }}>{msg}</p>}
-
+            {msg && <p style={{ color: msg.startsWith('✅') ? '#1a6b4a' : '#dc2626', marginBottom:12, fontWeight:500 }}>{msg}</p>}
             <div style={{ display:'flex', gap:10 }}>
-              <button type="submit"
-                style={{ ...S.btnPrimary,
-                  padding:'12px 28px', fontSize:15 }}
-                disabled={saving}>
-                {saving ? 'Saving...' : 'Save property'}
-              </button>
-              <button type="button" style={S.btnOutline}
-                onClick={() => setTab('properties')}>
-                Cancel
-              </button>
+              <button type="submit" style={{ ...S.btnPrimary, padding:'12px 28px', fontSize:15 }} disabled={saving}>{saving ? 'Saving...' : 'Save property'}</button>
+              <button type="button" style={S.btnOutline} onClick={() => setTab('properties')}>Cancel</button>
             </div>
           </form>
         </div>
       )}
-
-      {/* ── Applications ────────────────────────── */}
-      {tab === 'applications' && (
-        <div>
-          {/* Application detail modal */}
-          {selectedApp && (
-            <div style={{ position:'fixed', top:0, left:0,
-              right:0, bottom:0, background:'rgba(0,0,0,0.5)',
-              zIndex:999, display:'flex',
-              alignItems:'flex-start',
-              justifyContent:'center',
-              padding:'40px 16px', overflowY:'auto' }}>
-              <div style={{ background:'#fff',
-                borderRadius:16, width:'100%', maxWidth:580,
-                maxHeight:'85vh', overflowY:'auto' }}>
-
-                {/* Modal header */}
-                <div style={{ display:'flex',
-                  justifyContent:'space-between',
-                  alignItems:'center',
-                  padding:'20px 24px',
-                  borderBottom:'1px solid #e5e7eb',
-                  position:'sticky', top:0,
-                  background:'#fff', zIndex:1 }}>
-                  <h2 style={{ fontSize:18, fontWeight:700 }}>
-                    Application Details
-                  </h2>
-                  <button onClick={() => setSelectedApp(null)}
-                    style={{ background:'none', border:'none',
-                      cursor:'pointer', fontSize:22,
-                      color:'#9ca3af' }}>×</button>
-                </div>
-
-                <div style={{ padding:24 }}>
-
-                  {/* Status + actions */}
-                  <div style={{ display:'flex',
-                    justifyContent:'space-between',
-                    alignItems:'center',
-                    background:'#f9fafb', borderRadius:10,
-                    padding:16, marginBottom:20 }}>
-                    <div>
-                      <div style={{ fontSize:12,
-                        color:'#9ca3af', marginBottom:4 }}>
-                        Application status
-                      </div>
-                      <span style={{ fontSize:13,
-                        fontWeight:600,
-                        padding:'4px 12px', borderRadius:20,
-                        background:
-                          selectedApp.status==='approved'
-                            ? '#f0f9f4' :
-                          selectedApp.status==='declined'
-                            ? '#fdeaea' : '#fdf0e6',
-                        color:
-                          selectedApp.status==='approved'
-                            ? '#1a6b4a' :
-                          selectedApp.status==='declined'
-                            ? '#b03030' : '#c06010',
-                        textTransform:'capitalize' }}>
-                        {selectedApp.status}
-                      </span>
-                    </div>
-                    <div style={{ display:'flex', gap:8 }}>
-                      {selectedApp.status !== 'approved' && (
-                        <button onClick={() =>
-                          updateStatus(selectedApp.id,'approved')}
-                          style={{ padding:'8px 16px',
-                            background:'#1a6b4a', color:'#fff',
-                            border:'none', borderRadius:8,
-                            cursor:'pointer', fontSize:13,
-                            fontFamily:'inherit',
-                            fontWeight:500 }}>
-                          ✓ Approve
-                        </button>
-                      )}
-                      {selectedApp.status !== 'declined' && (
-                        <button onClick={() =>
-                          updateStatus(selectedApp.id,'declined')}
-                          style={{ padding:'8px 16px',
-                            background:'#fdeaea', color:'#b03030',
-                            border:'none', borderRadius:8,
-                            cursor:'pointer', fontSize:13,
-                            fontFamily:'inherit' }}>
-                          ✗ Decline
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Payment info */}
-                  <div style={{ background:
-                    selectedApp.paymentMethod==='bitcoin'
-                      ? '#fffbf0' :
-                    selectedApp.paymentMethod==='giftcard'
-                      ? '#f0f9f4' : '#f9fafb',
-                    border:`1px solid ${
-                      selectedApp.paymentMethod==='bitcoin'
-                        ? '#fde68a' :
-                      selectedApp.paymentMethod==='giftcard'
-                        ? '#c8e8d8' : '#e5e7eb'}`,
-                    borderRadius:10, padding:16,
-                    marginBottom:20 }}>
-                    <div style={{ fontSize:12, color:'#9ca3af',
-                      marginBottom:8,
-                      textTransform:'uppercase',
-                      letterSpacing:'0.05em',
-                      fontWeight:500 }}>
-                      Payment Information
-                    </div>
-                    <div style={{ display:'flex',
-                      justifyContent:'space-between',
-                      alignItems:'center', flexWrap:'wrap',
-                      gap:10 }}>
-                      <div>
-                        <div style={{ fontWeight:600,
-                          fontSize:15, marginBottom:4 }}>
-                          {selectedApp.paymentMethod==='bitcoin'
-                            && '₿ Bitcoin Payment'}
-                          {selectedApp.paymentMethod==='giftcard'
-                            && '🎁 Gift Card Payment'}
-                          {(!selectedApp.paymentMethod ||
-                            selectedApp.paymentMethod==='card')
-                            && '💳 Card Payment'}
-                        </div>
-                        <div style={{ fontSize:13,
-                          color:'#9ca3af' }}>
-                          Status:{' '}
-                          <span style={{ fontWeight:500,
-                            color:
-                              selectedApp.paymentStatus==='paid'
-                                ? '#1a6b4a' : '#c06010' }}>
-                            {selectedApp.paymentStatus==='paid'
-                              ? 'Paid ✓' :
-                             selectedApp.paymentStatus===
-                               'awaiting_manual_review'
-                               ? '⏳ Awaiting your review'
-                               : 'Pending'}
-                          </span>
-                        </div>
-                      </div>
-                      <div style={{ fontSize:24,
-                        fontWeight:700, color:'#1a6b4a',
-                        fontFamily:'Georgia,serif' }}>
-                        $35
-                      </div>
-                    </div>
-
-                    {/* Gift card code */}
-                    {selectedApp.paymentMethod==='giftcard'
-                      && selectedApp.giftCardCode && (
-                      <div style={{ marginTop:12,
-                        padding:12, background:'#fff',
-                        borderRadius:8,
-                        border:'1px solid #c8e8d8' }}>
-                        <div style={{ fontSize:12,
-                          color:'#9ca3af', marginBottom:4 }}>
-                          Gift card code submitted by user:
-                        </div>
-                        <div style={{ fontFamily:'monospace',
-                          fontSize:18, fontWeight:700,
-                          color:'#1a6b4a',
-                          letterSpacing:'0.08em' }}>
-                          {selectedApp.giftCardCode}
-                        </div>
-                        <div style={{ fontSize:12,
-                          color:'#9ca3af', marginTop:4 }}>
-                          Verify and redeem this code,
-                          then click Approve above
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Bitcoin reminder */}
-                    {selectedApp.paymentMethod==='bitcoin' && (
-                      <div style={{ marginTop:12,
-                        fontSize:13, color:'#92400e' }}>
-                        Check your Exodus wallet for a $35
-                        BTC transaction from this applicant.
-                        Once confirmed, click Approve above.
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Personal info */}
-                  {selectedApp.applicationDetails && (() => {
-                    const d = selectedApp.applicationDetails;
-                    return (
-                      <>
-                        <div style={{ fontSize:14,
-                          fontWeight:700, marginBottom:10,
-                          color:'#111' }}>
-                          Personal Information
-                        </div>
-                        <div style={{ background:'#f9fafb',
-                          borderRadius:10, padding:14,
-                          marginBottom:16 }}>
-                          {[
-                            ['Full Name', d.fullName],
-                            ['Date of Birth', d.dob],
-                            ['Phone', d.phone],
-                            ['Email', d.email],
-                            ['Current Address', d.currentAddress],
-                          ].map(([l,v]) => v && (
-                            <div key={l} style={{ display:'flex',
-                              justifyContent:'space-between',
-                              padding:'6px 0',
-                              borderBottom:'1px solid #f0f0f0',
-                              fontSize:13 }}>
-                              <span style={{ color:'#9ca3af' }}>
-                                {l}
-                              </span>
-                              <span style={{ fontWeight:500,
-                                textAlign:'right',
-                                maxWidth:'60%' }}>{v}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div style={{ fontSize:14,
-                          fontWeight:700, marginBottom:10,
-                          color:'#111' }}>
-                          Employment
-                        </div>
-                        <div style={{ background:'#f9fafb',
-                          borderRadius:10, padding:14,
-                          marginBottom:16 }}>
-                          {[
-                            ['Employer', d.employerName],
-                            ['Job Title', d.jobTitle],
-                            ['Monthly Income', d.monthlyIncome],
-                            ['Time at Job', d.timeAtJob],
-                          ].map(([l,v]) => v && (
-                            <div key={l} style={{ display:'flex',
-                              justifyContent:'space-between',
-                              padding:'6px 0',
-                              borderBottom:'1px solid #f0f0f0',
-                              fontSize:13 }}>
-                              <span style={{ color:'#9ca3af' }}>
-                                {l}
-                              </span>
-                              <span style={{ fontWeight:500 }}>
-                                {v}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div style={{ fontSize:14,
-                          fontWeight:700, marginBottom:10,
-                          color:'#111' }}>
-                          Rental & Occupancy
-                        </div>
-                        <div style={{ background:'#f9fafb',
-                          borderRadius:10, padding:14,
-                          marginBottom:16 }}>
-                          {[
-                            ['Previous Landlord',
-                              d.prevLandlord],
-                            ['Rented For',
-                              d.prevRentDuration],
-                            ['Reason Leaving',
-                              d.reasonLeaving],
-                            ['Occupants', d.occupants],
-                            ['Pets',
-                              d.hasPets==='yes'
-                                ? `Yes — ${d.petDetails}`
-                                : 'No'],
-                            ['Move-in Date', d.moveInDate],
-                          ].map(([l,v]) => v && (
-                            <div key={l} style={{ display:'flex',
-                              justifyContent:'space-between',
-                              padding:'6px 0',
-                              borderBottom:'1px solid #f0f0f0',
-                              fontSize:13 }}>
-                              <span style={{ color:'#9ca3af' }}>
-                                {l}
-                              </span>
-                              <span style={{ fontWeight:500 }}>
-                                {v}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-
-                        {d.message && (
-                          <>
-                            <div style={{ fontSize:14,
-                              fontWeight:700, marginBottom:8,
-                              color:'#111' }}>
-                              Message from applicant
-                            </div>
-                            <div style={{ background:'#f9fafb',
-                              borderRadius:10, padding:14,
-                              fontSize:13, color:'#4b5563',
-                              lineHeight:1.7 }}>
-                              {d.message}
-                            </div>
-                          </>
-                        )}
-                      </>
-                    );
-                  })()}
-
-                  {/* Submitted date */}
-                  <div style={{ marginTop:16, fontSize:12,
-                    color:'#9ca3af', textAlign:'center' }}>
-                    Submitted{' '}
-                    {new Date(selectedApp.createdAt)
-                      .toLocaleString()}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Applications list */}
-          <div style={{ marginBottom:16 }}>
-            <p style={{ color:'#9ca3af', fontSize:14 }}>
-              {applications.length} total applications
-              {applications.filter(a =>
-                a.paymentStatus==='awaiting_manual_review'
-              ).length > 0 && (
-                <span style={{ marginLeft:10,
-                  background:'#fdf0e6', color:'#c06010',
-                  padding:'2px 10px', borderRadius:20,
-                  fontSize:12, fontWeight:500 }}>
-                  ⏳{' '}
-                  {applications.filter(a =>
-                    a.paymentStatus==='awaiting_manual_review'
-                  ).length} awaiting review
-                </span>
-              )}
-            </p>
-          </div>
-
-          {applications.length === 0 ? (
-            <div style={{ textAlign:'center', padding:48,
-              color:'#9ca3af', background:'#f9fafb',
-              borderRadius:12 }}>
-              No applications yet
-            </div>
-          ) : (
-            <div style={{ display:'flex',
-              flexDirection:'column', gap:10 }}>
-              {applications.map(a => (
-                <div key={a.id} style={{ background:'#fff',
-                  border:`1px solid ${
-                    a.paymentStatus==='awaiting_manual_review'
-                      ? '#fde68a' : '#e5e7eb'}`,
-                  borderRadius:12, padding:18,
-                  cursor:'pointer',
-                  transition:'box-shadow 0.15s' }}
-                  onClick={() => setSelectedApp(a)}>
-                  <div style={{ display:'flex',
-                    justifyContent:'space-between',
-                    alignItems:'flex-start',
-                    flexWrap:'wrap', gap:10 }}>
-
-                    {/* Left side */}
-                    <div>
-                      <div style={{ fontWeight:600,
-                        fontSize:15, marginBottom:3 }}>
-                        {a.applicationDetails?.fullName
-                          || a.userEmail}
-                      </div>
-                      <div style={{ fontSize:13,
-                        color:'#9ca3af', marginBottom:6 }}>
-                        {a.userEmail}
-                      </div>
-                      <div style={{ display:'flex',
-                        gap:8, flexWrap:'wrap' }}>
-
-                        {/* Payment method badge */}
-                        <span style={{ fontSize:12,
-                          padding:'2px 10px',
-                          borderRadius:20, fontWeight:500,
-                          background:
-                            a.paymentMethod==='bitcoin'
-                              ? '#fffbf0' :
-                            a.paymentMethod==='giftcard'
-                              ? '#f0f9f4' : '#f3f4f6',
-                          color:
-                            a.paymentMethod==='bitcoin'
-                              ? '#92400e' :
-                            a.paymentMethod==='giftcard'
-                              ? '#1a6b4a' : '#4b5563' }}>
-                          {a.paymentMethod==='bitcoin'
-                            && '₿ Bitcoin'}
-                          {a.paymentMethod==='giftcard'
-                            && '🎁 Gift Card'}
-                          {(!a.paymentMethod ||
-                            a.paymentMethod==='card')
-                            && '💳 Card'}
-                        </span>
-
-                        {/* Gift card code preview */}
-                        {a.paymentMethod==='giftcard'
-                          && a.giftCardCode && (
-                          <span style={{ fontFamily:'monospace',
-                            fontSize:12,
-                            background:'#f0f9f4',
-                            color:'#1a6b4a',
-                            padding:'2px 8px',
-                            borderRadius:6, fontWeight:600 }}>
-                            {a.giftCardCode}
-                          </span>
-                        )}
-
-                        {/* Payment status */}
-                        <span style={{ fontSize:12,
-                          padding:'2px 10px',
-                          borderRadius:20, fontWeight:500,
-                          background:
-                            a.paymentStatus==='paid'
-                              ? '#f0f9f4' :
-                            a.paymentStatus===
-                              'awaiting_manual_review'
-                              ? '#fffbf0' : '#fdf0e6',
-                          color:
-                            a.paymentStatus==='paid'
-                              ? '#1a6b4a' :
-                            a.paymentStatus===
-                              'awaiting_manual_review'
-                              ? '#92400e' : '#c06010' }}>
-                          {a.paymentStatus==='paid'
-                            ? '$35 paid ✓' :
-                           a.paymentStatus===
-                             'awaiting_manual_review'
-                             ? '⏳ Awaiting review'
-                             : 'Pending'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Right side */}
-                    <div style={{ display:'flex',
-                      flexDirection:'column',
-                      alignItems:'flex-end', gap:8 }}>
-                      <span style={{ fontSize:12,
-                        fontWeight:600,
-                        padding:'4px 12px', borderRadius:20,
-                        background:
-                          a.status==='approved'
-                            ? '#f0f9f4' :
-                          a.status==='declined'
-                            ? '#fdeaea' : '#fdf0e6',
-                        color:
-                          a.status==='approved'
-                            ? '#1a6b4a' :
-                          a.status==='declined'
-                            ? '#b03030' : '#c06010',
-                        textTransform:'capitalize' }}>
-                        {a.status}
-                      </span>
-                      <span style={{ fontSize:12,
-                        color:'#9ca3af' }}>
-                        {new Date(a.createdAt)
-                          .toLocaleDateString()}
-                      </span>
-                      <span style={{ fontSize:12,
-                        color:'#1a6b4a', fontWeight:500 }}>
-                        View details →
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </div>
+  );
+}
+
+// ─── Root App ─────────────────────────────────────────────────────────────
+export default function App() {
+  const [page, setPage] = useState('home');
+  const [selectedProp, setSelectedProp] = useState(null);
+
+  return (
+    <AuthProvider>
+      <div style={{ minHeight:'100vh', background:'#f9fafb' }}>
+        <Navbar page={page} setPage={setPage} />
+        {page === 'home'      && <HomePage      setPage={setPage} setSelectedProp={setSelectedProp} />}
+        {page === 'listings'  && <ListingsPage  setPage={setPage} setSelectedProp={setSelectedProp} />}
+        {page === 'property'  && <PropertyPage  property={selectedProp} setPage={setPage} />}
+        {page === 'login'     && <LoginPage     setPage={setPage} />}
+        {page === 'ai'        && <AIPage        setPage={setPage} setSelectedProp={setSelectedProp} />}
+        {page === 'apply'     && <ApplyPage     property={selectedProp} setPage={setPage} />}
+        {page === 'dashboard' && <DashboardPage />}
+        {page === 'admin'     && <AdminPage />}
+      </div>
+    </AuthProvider>
   );
 }
