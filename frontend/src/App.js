@@ -1,4 +1,4 @@
-import AdminPage from './AdminPage';
+import AdminPage from './pages/AdminPage';
 import React, { useState, useEffect, createContext, useContext } from 'react';
 
 // ─── Tiny router (no react-router-dom needed to start) ────────────────────
