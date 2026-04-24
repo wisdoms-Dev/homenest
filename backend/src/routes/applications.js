@@ -5,6 +5,7 @@ const { authMiddleware, adminMiddleware } = require('../middleware/auth');
 const router = express.Router();
 
 // POST /api/applications - submit application
+
 router.post('/', authMiddleware, async (req, res) => {
   const db = getDb();
   const {
