@@ -1,3 +1,4 @@
+
 const express = require('express');
 const { getDb } = require('../firebase');
 const { authMiddleware, adminMiddleware } = require('../middleware/auth');
@@ -17,7 +18,6 @@ router.get('/', async (req, res) => {
     const snap = await query.limit(parseInt(limit)).get();
     let properties = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Client-side filters for price range and location (Firestore limitation)
     if (minPrice) properties = properties.filter(p => p.price >= parseInt(minPrice));
     if (maxPrice) properties = properties.filter(p => p.price <= parseInt(maxPrice));
     if (city) properties = properties.filter(p => p.city?.toLowerCase().includes(city.toLowerCase()));
@@ -46,17 +46,29 @@ router.post('/', adminMiddleware, async (req, res) => {
   const db = getDb();
   const {
     title, description, type, price, beds, baths, sqft,
-    address, city, state, zip, images, amenities, yearBuilt
+    address, city, state, zip, images, videos, amenities, yearBuilt
   } = req.body;
 
   try {
     const ref = db.collection('properties').doc();
     const data = {
-      title, description, type, price: parseInt(price),
-      beds: parseInt(beds), baths: parseInt(baths), sqft: parseInt(sqft),
-      address, city, state, zip, images: images || [],
-      amenities: amenities || [], yearBuilt: yearBuilt || null,
-      active: true, featured: false,
+      title,
+      description: description || '',
+      type,
+      price: parseInt(price),
+      beds: parseInt(beds),
+      baths: parseInt(baths),
+      sqft: parseInt(sqft),
+      address,
+      city,
+      state,
+      zip: zip || '',
+      images: images || [],
+      videos: videos || [],        // ← videos saved here
+      amenities: amenities || [],
+      yearBuilt: yearBuilt || null,
+      active: true,
+      featured: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -83,7 +95,9 @@ router.patch('/:id', adminMiddleware, async (req, res) => {
 router.delete('/:id', adminMiddleware, async (req, res) => {
   const db = getDb();
   try {
-    await db.collection('properties').doc(req.params.id).update({ active: false, updatedAt: new Date().toISOString() });
+    await db.collection('properties').doc(req.params.id).update({
+      active: false, updatedAt: new Date().toISOString()
+    });
     res.json({ message: 'Property removed' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -98,7 +112,9 @@ router.post('/:id/save', authMiddleware, async (req, res) => {
     const userDoc = await userRef.get();
     const saved = userDoc.data().savedProperties || [];
     const propId = req.params.id;
-    const updated = saved.includes(propId) ? saved.filter(id => id !== propId) : [...saved, propId];
+    const updated = saved.includes(propId)
+      ? saved.filter(id => id !== propId)
+      : [...saved, propId];
     await userRef.update({ savedProperties: updated });
     res.json({ saved: updated.includes(propId) });
   } catch (err) {
