@@ -1,54 +1,72 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authAPI } from '../utils/api';
 
-const AuthCtx = createContext({ user: null, loading: false, login: null, register: null, logout: null });
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('hn_user')); } catch { return null; }
-  });
+  const [user, setUser]       = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  useEffect(() => {
+    const token  = localStorage.getItem('hn_token');
+    const stored = localStorage.getItem('hn_user');
+
+    if (token && stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {
+        localStorage.removeItem('hn_token');
+        localStorage.removeItem('hn_user');
+        setLoading(false);
+        return;
+      }
+      // Try to refresh from backend — but don't crash if it's offline
+      authAPI.me()
+        .then(res => {
+          setUser(res.data);
+          localStorage.setItem('hn_user', JSON.stringify(res.data));
+        })
+        .catch(() => {
+          // Backend offline is fine — keep the stored user
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, []);
 
   const login = async (email, password) => {
-    const res = await fetch(`${base}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw { response: { data } };
-    localStorage.setItem('hn_token', data.token);
-    localStorage.setItem('hn_user', JSON.stringify(data.user));
-    setUser(data.user);
-    return data.user;
+    const res = await authAPI.login({ email, password });
+    const { token, user } = res.data;
+    localStorage.setItem('hn_token', token);
+    localStorage.setItem('hn_user', JSON.stringify(user));
+    setUser(user);
+    return user;
   };
 
   const register = async (name, email, password, phone) => {
-    const res = await fetch(`${base}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, phone }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw { response: { data } };
-    localStorage.setItem('hn_token', data.token);
-    localStorage.setItem('hn_user', JSON.stringify(data.user));
-    setUser(data.user);
-    return data.user;
+    const res = await authAPI.register({ name, email, password, phone });
+    const { token, user } = res.data;
+    localStorage.setItem('hn_token', token);
+    localStorage.setItem('hn_user', JSON.stringify(user));
+    setUser(user);
+    return user;
   };
 
   const logout = () => {
-    localStorage.clear();
+    localStorage.removeItem('hn_token');
+    localStorage.removeItem('hn_user');
     setUser(null);
-    window.location.href = '/';
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading: false, login, register, logout }}>
+    <AuthContext.Provider value={{
+      user, loading, login, register, logout,
+      isAdmin: user?.role === 'admin',
+    }}>
       {children}
-    </AuthCtx.Provider>
+    </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => useContext(AuthCtx);
-export default useAuth;
+export const useAuth = () => useContext(AuthContext);
