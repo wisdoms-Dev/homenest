@@ -4,31 +4,18 @@ import { authAPI } from '../utils/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token  = localStorage.getItem('hn_token');
+    const token = localStorage.getItem('hn_token');
     const stored = localStorage.getItem('hn_user');
-
     if (token && stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem('hn_token');
-        localStorage.removeItem('hn_user');
-        setLoading(false);
-        return;
-      }
-      // Try to refresh from backend — but don't crash if it's offline
+      setUser(JSON.parse(stored));
+      // Verify token is still valid
       authAPI.me()
-        .then(res => {
-          setUser(res.data);
-          localStorage.setItem('hn_user', JSON.stringify(res.data));
-        })
-        .catch(() => {
-          // Backend offline is fine — keep the stored user
-        })
+        .then(res => { setUser(res.data); localStorage.setItem('hn_user', JSON.stringify(res.data)); })
+        .catch(() => { localStorage.removeItem('hn_token'); localStorage.removeItem('hn_user'); setUser(null); })
         .finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -60,10 +47,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{
-      user, loading, login, register, logout,
-      isAdmin: user?.role === 'admin',
-    }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin: user?.role === 'admin' }}>
       {children}
     </AuthContext.Provider>
   );

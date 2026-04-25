@@ -166,10 +166,9 @@ export default function AdminPage() {
               + Add property
             </button>
           </div>
-          {/* FIX: wrap grid in a max-width container so a single card doesn't stretch full width */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,320px))', gap:20 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:20 }}>
             {properties.map(p => (
-              <div key={p.id} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, overflow:'hidden', width:'100%' }}>
+              <div key={p.id} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, overflow:'hidden' }}>
                 <div style={{ position:'relative', height:180, background:'#f3f4f6', overflow:'hidden' }}>
                   {p.images?.length > 0 ? (
                     <>

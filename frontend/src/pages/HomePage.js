@@ -5,8 +5,7 @@ import PropertyCard from '../components/PropertyCard';
 import './HomePage.css';
 
 // Fallback listings shown when backend is offline
-// FIX: was referenced as both DEMO_PROPERTIES and DEMOS — unified to DEMOS
-const DEMOS = [
+const DEMO_PROPERTIES = [
   { id: '1', title: 'Modern 2BR Apartment', address: '123 Main St', city: 'Austin', state: 'TX', price: 2100, type: 'rent', beds: 2, baths: 1, sqft: 980, images: ['https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=600&q=80'] },
   { id: '2', title: 'Charming 3BR House',   address: '456 Oak Ave', city: 'Miami',  state: 'FL', price: 3400, type: 'rent', beds: 3, baths: 2, sqft: 1450, images: ['https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=600&q=80'] },
   { id: '3', title: 'Studio in NYC',        address: '789 Park Blvd', city: 'New York', state: 'NY', price: 2800, type: 'rent', beds: 0, baths: 1, sqft: 480, images: ['https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=600&q=80'] },
@@ -21,23 +20,21 @@ const STATS = [
 ];
 
 export default function HomePage() {
-  const [featured, setFeatured] = useState(DEMOS);
+  const [featured, setFeatured] = useState(DEMO_PROPERTIES);
   const [search, setSearch]     = useState('');
   const [type, setType]         = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-    fetch(`${base}/properties?limit=4`)
-      .then(r => r.json())
-      .then(d => {
-        const props = d.properties || [];
-        // FIX: was referencing undefined DEMOS — now correctly uses the const above
-        setFeatured(props.length > 0 ? props : DEMOS.slice(0, 4));
-      })
-      .catch(() => setFeatured(DEMOS.slice(0, 4)));
-  }, []);
-
+  const base = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  fetch(`${base}/properties?limit=4`)
+    .then(r => r.json())
+    .then(d => {
+      const props = d.properties || [];
+      setFeatured(props.length > 0 ? props : DEMOS.slice(0,4));
+    })
+    .catch(() => setFeatured(DEMOS.slice(0,4)));
+}, []);
   const handleSearch = (e) => {
     e.preventDefault();
     navigate(`/listings?city=${search}&type=${type}`);
@@ -84,11 +81,11 @@ export default function HomePage() {
         <h2 className="section-heading">Featured listings</h2>
         <p className="section-sub">Hand-picked properties across the United States</p>
         <div className="properties-grid">
-          {/* FIX: was calling setSelectedProp/setPage which don't exist.
-              Now uses PropertyCard (shared component) with Link navigation. */}
-          {featured.map(p => (
-            <PropertyCard key={p.id} property={p} />
-          ))}
+          {featured.map(p => <PropCard key={p.id} p={{
+            ...p,
+            img: p.images?.[0] || p.img || 'https://images.unsplash.com/photo-1570129477492-45c003edd2be?w=500&q=70'
+            }} onClick={() => { setSelectedProp(p); setPage('property'); }} />)}
+          
         </div>
         <div style={{ textAlign: 'center', marginTop: 32 }}>
           <Link to="/listings" className="btn btn-outline btn-lg">View all listings</Link>
@@ -102,7 +99,6 @@ export default function HomePage() {
             <h2>Let AI find your perfect home</h2>
             <p>Tell us your preferences and our AI will match you with the best listings</p>
           </div>
-          {/* FIX: was /ai-match which is correct — matches the route in App.js */}
           <Link to="/ai-match" className="btn btn-accent btn-lg">Try AI Match</Link>
         </div>
       </section>
